@@ -9,7 +9,7 @@ int main(int argc, char* argv[]){
 
     if(argc != 8){
         cout << "Error: Number of Parameters not Correct!\n";
-        printf("Usage:  <l1_size> <l1_assoc> <l1_block_size> <l1_vc_num_blocks>  <l2_size> <l2_assoc>  \n");
+        printf("Usage:  <l1_size> <l1_assoc> <l1_block_size> <vc_num_blocks> <l2_size> <l2_assoc> <trace_file>\n");
         return 1;
     }
     int L1Size = atoi(argv[1]);
@@ -45,17 +45,21 @@ int main(int argc, char* argv[]){
     printf("L2_SIZE      :%d \n",L2Size);
     printf("L2_ASSOC     :%d \n",L2Assoc);
     printf("TRACE_FILE   :%s\n\n", argv[7]);
-    printf("===== L1 contents =====\n");
-    L1.printCache();
-    L1.printVictim();
+
     if(L2Size>0){
+        printf("===== L1 contents =====\n");
+        L1.printCache();
+        L1.printVictim();
         printf("===== L2 contents =====\n");
         (*L2).printCache();
+        L1.printResult();
+        (*L2).printResult();
     }
-    L1.printResult();
-    if(L2Size>0){
-        L2->printResult();
+    else{
+        printf("===== L1 contents =====\n");
+        L1.printCache();
+        L1.printVictim();
+        L1.printResult();
     }
-
     return 0;
 }
