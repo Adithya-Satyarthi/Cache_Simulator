@@ -9,7 +9,7 @@ int main(int argc, char* argv[]){
 
     if(argc != 8){
         cout << "Error: Number of Parameters not Correct!\n";
-        printf("Usage:  <l1_size> <l1_assoc> <l1_block_size> <vc_num_blocks> <l2_size> <l2_assoc> <trace_file>\n");
+        printf("Usage:  <l1_size> <l1_assoc> <l1_blocksize> <vc_num_blocks> <l2_size> <l2_assoc> <trace_file>\n");
         return 1;
     }
     int L1Size = atoi(argv[1]);
