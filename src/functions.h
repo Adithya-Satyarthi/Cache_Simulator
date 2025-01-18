@@ -2,23 +2,10 @@
 #include <stdlib.h>
 #include <math.h>
 #include <iostream>
+#include "policies.h"
 
 using namespace std;
 
-struct CacheBlock{
-    int Tag = -1;
-    int Counter = 0;
-    bool isValid = false;
-    bool isDirty = false;
-};
-
-struct VictimBlock{
-    int Index = -1;
-    int Tag = -1;
-    int Counter = 0;
-    bool isValid = false;
-    bool isDirty = false;
-};
 
 struct AddressField{
 
@@ -28,7 +15,7 @@ struct AddressField{
 
 };
 
-AddressField ConvertToFields(int Address, int NumOfSets, int BlockSize){
+AddressField ConvertToFields(unsigned int Address, int NumOfSets, int BlockSize){
 
     AddressField Result;
     int IndexBits = (int)log2(NumOfSets);
@@ -37,63 +24,21 @@ AddressField ConvertToFields(int Address, int NumOfSets, int BlockSize){
 
     unsigned int BlockOffsetMask = (1 << BlockOffsetBits) - 1;
     unsigned int IndexMask = (1 << IndexBits) - 1;
-    unsigned int TagMask = (1 << TagBits) - 1;
 
-    int BlockOffset = Address & BlockOffsetMask;
-    int Index = (Address >> BlockOffsetBits) & IndexMask;
-    int Tag = (Address >> (BlockOffsetBits + IndexBits)) & TagMask;
+    unsigned int BlockOffset = Address & BlockOffsetMask;
+    unsigned int Index = (Address >> BlockOffsetBits) & IndexMask;
+    unsigned int Tag = (Address >> (BlockOffsetBits + IndexBits));
 
-    Result = {Tag, Index, BlockOffset};
+    Result.Tag = Tag;
+    Result.Index = Index;
+    Result.BlockOffset = BlockOffset;
     return Result;
 }
 
-int ConvertToAddress(int Index, int Tag, int IndexBits, int BlockOffsetBits){
+unsigned int ConvertToAddress(unsigned int Index, unsigned int Tag, int IndexBits, int BlockOffsetBits){
     return (Tag << (IndexBits + BlockOffsetBits)) | (Index << BlockOffsetBits);
 }
 
-void CacheBlockAccess(vector<vector<CacheBlock>> &CacheSet, int Index, int Assoc, int Block){
-    int AccessedCounter = CacheSet[Index][Block].Counter;
-    for(int i = 0; i < Assoc; i++){
-        if(CacheSet[Index][i].Counter < AccessedCounter){
-            CacheSet[Index][i].Counter++;
-        }
-    }
-    CacheSet[Index][Block].Counter = 0;
-}
-
-void VictimBlockAccess(vector<VictimBlock> &VictimCache, int NumOfVBlocks, int Block){
-    int AccessedCounter = VictimCache[Block].Counter;
-    for(int i = 0; i < NumOfVBlocks; i++){
-        if(VictimCache[i].Counter < AccessedCounter){
-            VictimCache[i].Counter++;
-        }
-    }
-    VictimCache[Block].Counter = 0;
-}
-
-int GetCacheLRU(vector<vector<CacheBlock>> &CacheSet, int Index, int Assoc){
-    int LRUCounter = 0;
-    int LRU = 0;
-    for(int i = 0; i < Assoc; i++){
-        if(CacheSet[Index][i].Counter > LRUCounter){
-            LRUCounter = CacheSet[Index][i].Counter;
-            LRU = i;
-        }
-    }
-    return LRU;
-}
-
-int GetVictimLRU(vector<VictimBlock> &VictimCache, int NumOfVBlocks){
-    int LRUCounter = 0;
-    int LRU = 0;
-    for(int i = 0; i < NumOfVBlocks; i++){
-        if(VictimCache[i].Counter > LRUCounter){
-            LRUCounter = VictimCache[i].Counter;
-            LRU = i;
-        }
-    }
-    return LRU;
-}
 
 
 

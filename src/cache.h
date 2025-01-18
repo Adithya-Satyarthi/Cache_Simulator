@@ -2,10 +2,20 @@
 #include <stdlib.h>
 #include <iostream>
 #include <vector>
-#include<algorithm>
+#include <algorithm>
 #include "functions.h"
 
 using namespace std;
+
+struct Result{
+    int Reads;
+    int ReadMisses;
+    int Writes;
+    int WriteMisses;
+    int SwapRequests;
+    int Swaps;
+    int WriteBacks;
+};
 
 
 class Cache
@@ -19,10 +29,10 @@ public:
     int VictimSize;
     int NumOfSets;
     int NumOfVBlocks;
-    bool VictimEnabled;
-    bool L2Enabled;
+    bool VictimEnabled = false;
+    bool L2Enabled = false;
 
-    Cache* L2;
+    Cache* L2 = nullptr;
 
     int IndexBits;
     int BlockOffsetBits;
@@ -30,6 +40,8 @@ public:
 
     vector<vector<CacheBlock>> CacheSet;
     vector<VictimBlock> VictimCache;
+
+    unique_ptr<ReplacementPolicy> Policy;
     
 
     int Misses = 0;
@@ -44,36 +56,54 @@ public:
     int VictimSwaps = 0;
     int WriteBacks = 0;
 
-    Cache(int S, int Assoc, int BS, int VS = 0, Cache* Ptr = nullptr){
+    Cache(int S, int Assoc, int BS, int VS = 0, string policy = "LRU"){
+        if(S>0 && Assoc>0 && BS>0){
+            Size = S;
+            Associativity = Assoc;
+            BlockSize = BS;
+            VictimSize = VS;
+            VictimEnabled = VictimSize>0 ? true : false;
+            NumOfSets = Size/(BlockSize*Associativity);
+            NumOfVBlocks = VictimSize;
+            IndexBits = (int)log2(NumOfSets);
+            BlockOffsetBits = (int)log2(BlockSize);
+            TagBits = 32 - IndexBits - BlockOffsetBits;
 
-        Size = S;
-        Associativity = Assoc;
-        BlockSize = BS;
-        VictimSize = VS;
-        L2 = Ptr;
-        VictimEnabled = VictimSize>0 ? true : false;
-        L2Enabled = (L2 == nullptr) ? false : true;
-        NumOfSets = Size/(BlockSize*Associativity);
-        NumOfVBlocks = VictimSize;
-        IndexBits = (int)log2(NumOfSets);
-        BlockOffsetBits = (int)log2(BlockSize);
-        TagBits = 32 - IndexBits - BlockOffsetBits;
+            Policy = InitiatePolicy(policy, Associativity, NumOfSets, NumOfVBlocks);
 
-        CacheSet = vector<vector<CacheBlock>>(NumOfSets, vector<CacheBlock>(Associativity));
-        VictimCache = vector<VictimBlock>(NumOfVBlocks);
+            CacheSet = vector<vector<CacheBlock>>(NumOfSets, vector<CacheBlock>(Associativity));
+            VictimCache = vector<VictimBlock>(NumOfVBlocks);
 
-        for(int i = 0; i < NumOfSets; i++){
-            for(int j = 0; j < Associativity; j++){
-                CacheSet[i][j].Counter = j;
+            for(int i = 0; i < NumOfSets; i++){
+                for(int j = 0; j < Associativity; j++){
+                    CacheSet[i][j].Counter = j;
+                }
+            }
+            for(int i = 0; i < NumOfVBlocks; i++){
+                VictimCache[i].Counter = i;
             }
         }
-        for(int i = 0; i < NumOfVBlocks; i++){
-            VictimCache[i].Counter = i;
-        }
-
     };
 
-    void read(int Address){
+    void CacheBlockAccess(vector<vector<CacheBlock>> &CacheSet, unsigned int Index, int Assoc, int Block){
+        Policy->CacheBlockAccess(CacheSet, Index, Assoc, Block);
+    }
+    void VictimBlockAccess(vector<VictimBlock> &VictimCache, int NumOfVBlocks, int Block){
+        Policy->VictimBlockAccess(VictimCache, NumOfVBlocks, Block);
+    }
+    int CacheBlockEvict(vector<vector<CacheBlock>> &CacheSet, unsigned int Index, int Assoc){
+        return Policy->CacheBlockEvict(CacheSet, Index, Assoc);
+    }
+    int VictimBlockEvict(vector<VictimBlock> &VictimCache, int NumOfVBlocks){
+        return Policy->VictimBlockEvict(VictimCache, NumOfVBlocks);
+    }
+    
+    void ConnectToMem(Cache *Ptr){
+        L2 = Ptr;
+        L2Enabled = true;
+    }
+
+    void read(unsigned int Address){
         Reads++;
         AddressField AddressBits = ConvertToFields(Address, NumOfSets, BlockSize);
         bool MatchFound = false;
@@ -95,7 +125,7 @@ public:
                 for(int i = 0; i < NumOfVBlocks; i++){
                     if(VictimCache[i].Tag == AddressBits.Tag && VictimCache[i].Index == AddressBits.Index){
                         VictimSwaps++;
-                        int LRUBlock = GetCacheLRU(CacheSet, AddressBits.Index, Associativity);
+                        int LRUBlock = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
                         CacheBlock LRU = CacheSet[AddressBits.Index][LRUBlock];
                         CacheSet[AddressBits.Index][LRUBlock].Tag = VictimCache[i].Tag;
                         CacheSet[AddressBits.Index][LRUBlock].isDirty = VictimCache[i].isDirty;
@@ -111,13 +141,15 @@ public:
                 if(!VictimMatchFound){
                     if(L2Enabled){
                     (*L2).read(Address);
+                    //printf("%x\n", Address);
                     }
-                    int CacheLRU = GetCacheLRU(CacheSet, AddressBits.Index, Associativity);
-                    int VictimLRU = GetVictimLRU(VictimCache, NumOfVBlocks);
+                    int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
+                    int VictimLRU = VictimBlockEvict(VictimCache, NumOfVBlocks);
                     if(VictimCache[VictimLRU].isDirty){
                         WriteBacks++;
-                        int WriteAddress = ConvertToAddress(VictimCache[VictimLRU].Index, VictimCache[VictimLRU].Tag, IndexBits, BlockOffsetBits);
+                        unsigned int WriteAddress = ConvertToAddress(VictimCache[VictimLRU].Index, VictimCache[VictimLRU].Tag, IndexBits, BlockOffsetBits);
                         if(L2Enabled)(*L2).write(WriteAddress);
+                        //printf("%x\n", WriteAddress);
                     }
                     VictimCache[VictimLRU].Index = AddressBits.Index;
                     VictimCache[VictimLRU].Tag =  CacheSet[AddressBits.Index][CacheLRU].Tag;
@@ -131,12 +163,14 @@ public:
             else{
                 if(L2Enabled){
                     (*L2).read(Address);
+                    //printf("%x\n", Address);
                 }
-                int CacheLRU = GetCacheLRU(CacheSet, AddressBits.Index, Associativity);
+                int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
                 if(CacheSet[AddressBits.Index][CacheLRU].isDirty){
                     WriteBacks++;
-                    int WriteAddress = ConvertToAddress(AddressBits.Index, CacheSet[AddressBits.Index][CacheLRU].Tag, IndexBits, BlockOffsetBits);
+                    unsigned int WriteAddress = ConvertToAddress(AddressBits.Index, CacheSet[AddressBits.Index][CacheLRU].Tag, IndexBits, BlockOffsetBits);
                     if(L2Enabled)(*L2).write(WriteAddress);
+                    //printf("%x\n", WriteAddress);
                 }
                 CacheSet[AddressBits.Index][CacheLRU].Tag = AddressBits.Tag;
                 CacheSet[AddressBits.Index][CacheLRU].isDirty = false;
@@ -146,7 +180,7 @@ public:
 
 
     }
-    void write(int Address){
+    void write(unsigned int Address){
         Writes++;
         bool MatchFound = false;
         bool CacheFull = true;
@@ -169,7 +203,7 @@ public:
                 for(int i = 0; i < NumOfVBlocks; i++){
                     if(VictimCache[i].Tag == AddressBits.Tag && VictimCache[i].Index == AddressBits.Index){
                         VictimSwaps++;
-                        int CacheLRU = GetCacheLRU(CacheSet, AddressBits.Index, Associativity);
+                        int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
                         CacheBlock LRU = CacheSet[AddressBits.Index][CacheLRU];
                         CacheSet[AddressBits.Index][CacheLRU].Tag = VictimCache[i].Tag;
                         CacheSet[AddressBits.Index][CacheLRU].isDirty = true;
@@ -185,13 +219,15 @@ public:
                 if(!VictimMatchFound){
                     if(L2Enabled){
                     (*L2).read(Address);
+                    //printf("%x\n", Address);
                     }
-                    int CacheLRU = GetCacheLRU(CacheSet, AddressBits.Index, Associativity);
-                    int VictimLRU = GetVictimLRU(VictimCache, NumOfVBlocks);
+                    int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
+                    int VictimLRU = VictimBlockEvict(VictimCache, NumOfVBlocks);
                     if(VictimCache[VictimLRU].isDirty){
                         WriteBacks++;
-                        int WriteAddress = ConvertToAddress(AddressBits.Index, AddressBits.Tag, IndexBits, BlockOffsetBits);
+                        unsigned int WriteAddress = ConvertToAddress(AddressBits.Index, AddressBits.Tag, IndexBits, BlockOffsetBits);
                         if(L2Enabled)(*L2).write(WriteAddress);
+                        //printf("%x\n", WriteAddress);
                     }
                     VictimCache[VictimLRU].Index = AddressBits.Index;
                     VictimCache[VictimLRU].Tag =  CacheSet[AddressBits.Index][CacheLRU].Tag;
@@ -205,12 +241,14 @@ public:
             else{
                 if(L2Enabled){
                     (*L2).read(Address);
+                    //printf("%x\n", Address);
                  }
-                int CacheLRU = GetCacheLRU(CacheSet, AddressBits.Index, Associativity);
+                int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
                 if(CacheSet[AddressBits.Index][CacheLRU].isDirty){
                     WriteBacks++;
-                    int WriteAddress = ConvertToAddress(AddressBits.Index, AddressBits.Tag, IndexBits, BlockOffsetBits);
+                    unsigned int WriteAddress = ConvertToAddress(AddressBits.Index, AddressBits.Tag, IndexBits, BlockOffsetBits);
                     if(L2Enabled)(*L2).write(WriteAddress);
+                    //printf("%x\n", WriteAddress);
                 }
                 CacheSet[AddressBits.Index][CacheLRU].Tag = AddressBits.Tag;
                 CacheSet[AddressBits.Index][CacheLRU].isDirty = true;
@@ -246,7 +284,7 @@ public:
     void printVictim(){
         if (VictimEnabled) {
             printf("===== VC contents ===== \n");
-            printf("set 0:");
+            printf("set 0: ");
 
             vector<VictimBlock> sortedVictimCache = VictimCache;
             sort(sortedVictimCache.begin(), sortedVictimCache.end(), [](const VictimBlock &a, const VictimBlock &b) {
@@ -254,7 +292,7 @@ public:
             });
 
             for (int i = 0; i < NumOfVBlocks; i++) {
-                printf("%x ", ConvertToAddress(sortedVictimCache[i].Index, sortedVictimCache[i].Tag, IndexBits, BlockOffsetBits));
+                printf("%x ", (sortedVictimCache[i].Tag << (IndexBits)) | sortedVictimCache[i].Index);
                 if (sortedVictimCache[i].isDirty) {
                     printf("D  ");
                 } else {
@@ -265,16 +303,8 @@ public:
         }
     }
 
-
-    void printResult(){
-        printf("Reads: %d\n", Reads);
-        //printf("Read Hits: %d\n", ReadHits);
-        printf("Read Misses: %d\n", ReadMisses);
-        printf("Writes: %d\n", Writes);
-        //printf("Write Hits: %d\n", WriteHits);
-        printf("Write Misses: %d\n", WriteMisses);
-        printf("Swap Requests: %d\n", SwapRequests);
-        printf("Swaps: %d\n", VictimSwaps);
-        printf("Writebacks: %d\n\n", WriteBacks);
+    Result getResult(){
+        Result Results = {Reads, ReadMisses, Writes, WriteMisses, SwapRequests, VictimSwaps, WriteBacks};
+        return Results;
     }
 };
