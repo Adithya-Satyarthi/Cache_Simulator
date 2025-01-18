@@ -1,6 +1,6 @@
 # Cache Simulator
 
-A configurable N-way set-associative cache simulator featuring configurable replacement policies, write-back mechanism, and optional victim caches for both L1 and L2 caches. Designed for performance analysis and experimentation with benchmarks like SPEC 2000.
+A configurable N-way set-associative cache simulator featuring configurable replacement policies, write-back mechanism, and optional victim caches for both L1 and L2 caches. Designed for performance analysis and experimentation with benchmarks like SPEC 2006.
 
 ## Features
 
