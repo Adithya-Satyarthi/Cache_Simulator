@@ -68,7 +68,7 @@ int main(int argc, char* argv[]){
         float SwapRequestRate = (float)L1Result.SwapRequests/(L1Result.Reads+L1Result.Writes);
         printf("Swap Request Rate:    %f\n", SwapRequestRate);
         printf("Swaps:                %d\n", L1Result.Swaps);
-        float CombinedMissRate = (float)(L1Result.ReadMisses+L1Result.ReadMisses-L1Result.Swaps)/(L1Result.Reads+L1Result.Writes);
+        float CombinedMissRate = (float)(L1Result.ReadMisses+L1Result.WriteMisses-L1Result.Swaps)/(L1Result.Reads+L1Result.Writes);
         printf("Combined Miss Rate:   %f\n", CombinedMissRate);
         printf("Writebacks:           %d\n\n", L1Result.WriteBacks);
         printf("Cache L2\n");
