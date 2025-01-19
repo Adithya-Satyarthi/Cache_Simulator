@@ -12,6 +12,7 @@ struct CacheBlock{
     int Counter = 0;
     bool isValid = false;
     bool isDirty = false;
+    unsigned int Address;
 };
 
 struct VictimBlock{
@@ -20,6 +21,7 @@ struct VictimBlock{
     int Counter = 0;
     bool isValid = false;
     bool isDirty = false;
+    unsigned int Address;
 };
 
 

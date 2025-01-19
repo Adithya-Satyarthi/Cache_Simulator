@@ -129,10 +129,12 @@ public:
                         CacheBlock LRU = CacheSet[AddressBits.Index][LRUBlock];
                         CacheSet[AddressBits.Index][LRUBlock].Tag = VictimCache[i].Tag;
                         CacheSet[AddressBits.Index][LRUBlock].isDirty = VictimCache[i].isDirty;
+                        CacheSet[AddressBits.Index][LRUBlock].Address = VictimCache[i].Address;
                         CacheBlockAccess(CacheSet, AddressBits.Index, Associativity, LRUBlock);
                         VictimCache[i].Index = AddressBits.Index;
                         VictimCache[i].Tag = LRU.Tag;
                         VictimCache[i].isDirty = LRU.isDirty;
+                        VictimCache[i].Address = LRU.Address;
                         VictimBlockAccess(VictimCache, NumOfVBlocks, i);
                         VictimMatchFound = true;
                         break;
@@ -141,39 +143,44 @@ public:
                 if(!VictimMatchFound){
                     if(L2Enabled){
                     (*L2).read(Address);
-                    //printf("%x\n", Address);
+                    //printf("r %x\n", Address);
                     }
                     int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
                     int VictimLRU = VictimBlockEvict(VictimCache, NumOfVBlocks);
                     if(VictimCache[VictimLRU].isDirty){
                         WriteBacks++;
-                        unsigned int WriteAddress = ConvertToAddress(VictimCache[VictimLRU].Index, VictimCache[VictimLRU].Tag, IndexBits, BlockOffsetBits);
+                        //unsigned int WriteAddress = ConvertToAddress(VictimCache[VictimLRU].Index, VictimCache[VictimLRU].Tag, IndexBits, BlockOffsetBits);
+                        unsigned int WriteAddress = VictimCache[VictimLRU].Address;
                         if(L2Enabled)(*L2).write(WriteAddress);
-                        //printf("%x\n", WriteAddress);
+                        //printf("w %x\n", WriteAddress);
                     }
                     VictimCache[VictimLRU].Index = AddressBits.Index;
                     VictimCache[VictimLRU].Tag =  CacheSet[AddressBits.Index][CacheLRU].Tag;
                     VictimCache[VictimLRU].isDirty = CacheSet[AddressBits.Index][CacheLRU].isDirty;
+                    VictimCache[VictimLRU].Address = CacheSet[AddressBits.Index][CacheLRU].Address;
                     VictimBlockAccess(VictimCache, NumOfVBlocks, VictimLRU);
                     CacheSet[AddressBits.Index][CacheLRU].Tag = AddressBits.Tag;
                     CacheSet[AddressBits.Index][CacheLRU].isDirty = false;
+                    CacheSet[AddressBits.Index][CacheLRU].Address = Address;
                     CacheBlockAccess(CacheSet, AddressBits.Index, Associativity, CacheLRU);
                 }
             }
             else{
                 if(L2Enabled){
                     (*L2).read(Address);
-                    //printf("%x\n", Address);
+                    //printf("r %x\n", Address);
                 }
                 int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
                 if(CacheSet[AddressBits.Index][CacheLRU].isDirty){
                     WriteBacks++;
-                    unsigned int WriteAddress = ConvertToAddress(AddressBits.Index, CacheSet[AddressBits.Index][CacheLRU].Tag, IndexBits, BlockOffsetBits);
+                    //unsigned int WriteAddress = ConvertToAddress(AddressBits.Index, CacheSet[AddressBits.Index][CacheLRU].Tag, IndexBits, BlockOffsetBits);
+                    unsigned int WriteAddress = CacheSet[AddressBits.Index][CacheLRU].Address;
                     if(L2Enabled)(*L2).write(WriteAddress);
-                    //printf("%x\n", WriteAddress);
+                    //printf("w %x\n", WriteAddress);
                 }
                 CacheSet[AddressBits.Index][CacheLRU].Tag = AddressBits.Tag;
                 CacheSet[AddressBits.Index][CacheLRU].isDirty = false;
+                CacheSet[AddressBits.Index][CacheLRU].Address = Address;
                 CacheBlockAccess(CacheSet, AddressBits.Index, Associativity, CacheLRU);
             }
         }
@@ -207,10 +214,12 @@ public:
                         CacheBlock LRU = CacheSet[AddressBits.Index][CacheLRU];
                         CacheSet[AddressBits.Index][CacheLRU].Tag = VictimCache[i].Tag;
                         CacheSet[AddressBits.Index][CacheLRU].isDirty = true;
+                        CacheSet[AddressBits.Index][CacheLRU].Address = VictimCache[i].Address;
                         CacheBlockAccess(CacheSet, AddressBits.Index, Associativity, CacheLRU);
                         VictimCache[i].Index = AddressBits.Index;
                         VictimCache[i].Tag = LRU.Tag;
                         VictimCache[i].isDirty = LRU.isDirty;
+                        VictimCache[i].Address = LRU.Address;
                         VictimBlockAccess(VictimCache, NumOfVBlocks, i);
                         VictimMatchFound = true;
                         break;
@@ -219,39 +228,44 @@ public:
                 if(!VictimMatchFound){
                     if(L2Enabled){
                     (*L2).read(Address);
-                    //printf("%x\n", Address);
+                    //printf("r %x\n", Address);
                     }
                     int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
                     int VictimLRU = VictimBlockEvict(VictimCache, NumOfVBlocks);
                     if(VictimCache[VictimLRU].isDirty){
                         WriteBacks++;
-                        unsigned int WriteAddress = ConvertToAddress(AddressBits.Index, AddressBits.Tag, IndexBits, BlockOffsetBits);
+                        //unsigned int WriteAddress = ConvertToAddress(VictimCache[VictimLRU].Index, VictimCache[VictimLRU].Tag, IndexBits, BlockOffsetBits);
+                        unsigned int WriteAddress = VictimCache[VictimLRU].Address;
                         if(L2Enabled)(*L2).write(WriteAddress);
-                        //printf("%x\n", WriteAddress);
+                        //printf("w %x\n", WriteAddress);
                     }
                     VictimCache[VictimLRU].Index = AddressBits.Index;
                     VictimCache[VictimLRU].Tag =  CacheSet[AddressBits.Index][CacheLRU].Tag;
                     VictimCache[VictimLRU].isDirty = CacheSet[AddressBits.Index][CacheLRU].isDirty;
+                    VictimCache[VictimLRU].Address = CacheSet[AddressBits.Index][CacheLRU].Address;
                     VictimBlockAccess(VictimCache, NumOfVBlocks, VictimLRU);
                     CacheSet[AddressBits.Index][CacheLRU].Tag = AddressBits.Tag;
                     CacheSet[AddressBits.Index][CacheLRU].isDirty = true;
+                    CacheSet[AddressBits.Index][CacheLRU].Address = Address;
                     CacheBlockAccess(CacheSet, AddressBits.Index, Associativity, CacheLRU);
                 }
             }
             else{
                 if(L2Enabled){
                     (*L2).read(Address);
-                    //printf("%x\n", Address);
+                    //printf("r %x\n", Address);
                  }
                 int CacheLRU = CacheBlockEvict(CacheSet, AddressBits.Index, Associativity);
                 if(CacheSet[AddressBits.Index][CacheLRU].isDirty){
                     WriteBacks++;
-                    unsigned int WriteAddress = ConvertToAddress(AddressBits.Index, AddressBits.Tag, IndexBits, BlockOffsetBits);
+                    //unsigned int WriteAddress = ConvertToAddress(AddressBits.Index, CacheSet[AddressBits.Index][CacheLRU].Tag, IndexBits, BlockOffsetBits);
+                    unsigned int WriteAddress = CacheSet[AddressBits.Index][CacheLRU].Address;
                     if(L2Enabled)(*L2).write(WriteAddress);
-                    //printf("%x\n", WriteAddress);
+                    //printf("w %x\n", WriteAddress);
                 }
                 CacheSet[AddressBits.Index][CacheLRU].Tag = AddressBits.Tag;
                 CacheSet[AddressBits.Index][CacheLRU].isDirty = true;
+                CacheSet[AddressBits.Index][CacheLRU].Address = Address;
                 CacheBlockAccess(CacheSet, AddressBits.Index, Associativity, CacheLRU);
             }
         }
